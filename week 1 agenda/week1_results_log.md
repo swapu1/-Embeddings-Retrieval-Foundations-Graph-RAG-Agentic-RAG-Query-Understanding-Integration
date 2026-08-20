@@ -78,5 +78,42 @@ paraphrased/abbreviated queries.
 
 ---
 
-## Next: Day 3 — Vector DB setup (persisted PubMedBERT embeddings), Day 4 — RRF
-fusion of BM25 + PubMedBERT, re-run eval_set on hybrid.
+## Day 3 — Vector DB Setup (MongoDB Atlas)
+
+**Goal:** move from in-memory embedding search to a persisted, queryable vector
+store — matches production architecture instead of re-encoding the corpus on
+every script run.
+
+**Setup:**
+- MongoDB Atlas M0 (free tier) cluster, `clinical-retrieval`.
+- Database `clinical_retrieval`, collection `documents` — 26 docs, each storing
+  `doc_id`, `text`, and its PubMedBERT `embedding` (768-dim).
+- Atlas Vector Search index (`vector_index`) created via "Bring your own
+  embeddings" path (NOT Automated Embedding — that route uses MongoDB's hosted
+  embedding models and bills per token, not needed here since embeddings were
+  already generated locally on Day 1).
+
+**Verification query:** "irregular heartbeat, fast rate, dizziness" (same query
+that stress-tested BM25 badly on Day 2, ranking #23).
+
+| Rank | Doc | Score | Content |
+|---|---|---|---|
+| 1 | 3 | 0.964 | AFib note (correct answer) |
+| 2 | 1 | 0.946 | Acute MI note |
+| 3 | 4 | 0.945 | CHF note |
+| 4 | 10 | 0.942 | PE/DVT guideline |
+| 5 | 20 | 0.940 | Medication list |
+
+Correct doc (3) returned at #1 via MongoDB's native `$vectorSearch` — matches
+Day 1's in-memory result, confirms the persisted vector index behaves
+identically to the manual cosine-similarity loop, just served by the DB
+instead of Python.
+
+**Note:** scores are tightly clustered (0.94-0.96) — same anisotropy behavior
+observed on Day 1. Relative ranking is still correct; absolute score
+thresholds aren't meaningful for this model.
+
+---
+
+## Next: Day 4 — RRF fusion of BM25 + PubMedBERT (via MongoDB vector search),
+re-run eval_set on hybrid. Day 5 — cross-encoder re-ranking on hybrid top-k.
